@@ -4,27 +4,35 @@ from wb import *
 import grt
 import mforms
 
-ModuleInfo = DefineModule("ModelDocumentation", author="TheOwls", version="1.0.1", description="Generate Markdown documentation from a model for DevOps")
+ModuleInfo = DefineModule("ModelDocumentation", author="TheOwls", version="1.0.2", description="Generate Markdown documentation from a model for DevOps")
 
 # This plugin takes no arguments
-@ModuleInfo.plugin("info.theowls.wb.documentation", caption="Generate documentation (Markdown)", description="Creaates a Markdown for Devops from the DDM", input=[wbinputs.currentDiagram()], pluginMenu="Utilities")
+@ModuleInfo.plugin("info.theowls.wb.documentation", caption="Generate documentation (Markdown)", description="Creates Markdown for Devops from the DDM. It will List out all times, and create a relationship model.", input=[wbinputs.currentDiagram()], pluginMenu="Utilities")
 @ModuleInfo.export(grt.INT, grt.classes.db_Catalog)
 def documentation(diagram):
 
     textMain = "# Schema documentation\n\n\n"
-    textHead = "### Tables:\n| Name | Use |\n| --- | --- |\n"
+    textHead = "### Tables:\n| :question: | Name | Use |\n| :---: | --- | --- |\n"
+    textRelationship = "## Relationship\n::: mermaid\n graph TD;\n"
+    textRelationshipLinks = ""
     textDetail = ""
+    # Loop Tables
     for figure in diagram.figures:
         if hasattr(figure, "table") and figure.table:
-            textHead += "| [" + figure.table.name + "](#" + str.lower(figure.table.name) + ") | " + figure.table.comment + " |\n"
+            textHead += "|  | [" + figure.table.name + "](#" + str.lower(figure.table.name) + ") | " + figure.table.comment + " |\n"
             textDetail += writeTableDoc(figure.table)
+            textRelationship += nameBase(str.lower(figure.table.name)) + '["' + figure.table.name + '"];\n'
+            textRelationship += "click " + nameBase(str.lower(figure.table.name)) + ' "#' + str.lower(figure.table.name) + '";\n'
+            textRelationshipLinks += writeTableLink(figure.table)
 
-    textMain += textHead + "\n\n" + textDetail + "\n\n"
+    # Output To Clipboard
+    textRelationship += textRelationshipLinks + ":::\n"
+    textMain += textHead + "\n\n" + textRelationship + "\n\n" + textDetail + "\n\n"
     mforms.Utilities.set_clipboard_text(textMain)
     mforms.App.get().set_status_text("Documentation generated into the clipboard. Paste it to your editor.")
-
-    print ("Documentation is copied to the clipboard.")
+    print("Documentation is copied to the clipboard.")
     return 0
+
 
 def writeTableDoc(table):
     text = '<a id="' + str.lower(table.name) + '"></a>\n## Table: `' + table.name + "`\n"
@@ -104,7 +112,6 @@ def writeColumnDoc(column, table):
             text +=  ("<br /><br />" if column.comment else "") + "**foreign key** to column `" + fk.referencedColumns[0].name + "` on table `" + fk.referencedColumns[0].owner.name + "`."
             break
 
-
     # finish
     text  +=  " |" + "\n"
     return text
@@ -129,6 +136,19 @@ def writeIndexDoc(index):
 
     return text
 
+def writeTableLink(table):
+    text = ""
+    for fk in table.foreignKeys:
+        if fk.columns[0].isNotNull == 1:
+            text += nameBase(str.lower(table.name)) + ' --> |"' + fk.columns[0].name +'"|' + nameBase(str.lower(fk.referencedColumns[0].owner.name)) + ';\n'
+        else:
+            text += nameBase(str.lower(table.name)) + ' -.-> |"' + fk.columns[0].name +'"|' + nameBase(str.lower(fk.referencedColumns[0].owner.name)) + ';\n'
+    return text
+
+
 def nl2br(text):
     return "<br />".join(map(lambda x: x.strip(), text.split("\n")))
+
+def nameBase(text):
+    return text.replace("_", "").replace("-", "")
 
